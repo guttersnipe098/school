@@ -1,12 +1,14 @@
 /*******************************************************************************
 * File:       server.c
-* Version:    0.2
+* Version:    0.3
 * Purpose:    Accepts connections & implements TRANSLATE, GET, STORE, & EXIT
 * Author:     Michael Altfield <maltfield@knights.ucf.edu>
 * Course:     CNT4707
 * Assignment: 1
 * Created:    2011-10-01
 * Updated:    2011-10-02
+* Notes:      Much of this code's base was obtained/modified using:
+              http://beej.us/guide/bgnet/
 *******************************************************************************/
 
 /*******************************************************************************
@@ -17,6 +19,7 @@
 #define PORT "3331"
 #define BACKLOG 10 // number of connections queue size
 int yes = 1;
+#define MAXDATASIZE 100 // max number of bytes that can be recieved at once
 
 /*******************************************************************************
                                    INCLUDES                                     
@@ -36,7 +39,7 @@ int yes = 1;
 #include <signal.h>
 
 /*******************************************************************************
-                              VARIABLE DEFINITIONS                              
+                           GLOBAL VARIABLE DEFINITIONS                      
 *******************************************************************************/
 
 int status; // generic varaible for all function results
@@ -61,10 +64,17 @@ void sigchld_handler( int s ){
 
 int main(){
 
+	/***********************
+	* VARIABLE DEFINITIONS *
+	***********************/
+
 	memset( &hints, 0, sizeof(hints) ); // make struct empty
 	hints.ai_family = AF_INET;          // IPv4 only
 	hints.ai_socktype = SOCK_STREAM;    // TCP
 	hints.ai_flags = AI_PASSIVE;        // use my ip
+
+	int numbytes; // number of bytes returned by send() or recv()
+	char buf[MAXDATASIZE];
 
 	/****************
 	* getaddrinfo() *
@@ -139,8 +149,8 @@ int main(){
 	// is p pointing to NULL?
 	if( p == NULL ){
 		// p is pointing to null, which means we iterated through all of the
-		// getaddrinfo() results (trying to connect at each iteration), and made
-		// it to the end of the results, still without a connection.
+		// getaddrinfo() results (trying to bind() at each iteration), and made
+		// it to the end of the results, still without a working bind().
 
 		fprintf( stderr, "server: failed to bind\n" );
 		return 2;
@@ -193,9 +203,76 @@ int main(){
 
 			close(sockfd); // child doesn't need the listener
 
-			status = send( new_fd, "Hellow, world!", 13, 0 );
+			numbytes = send( new_fd, "Server is ready...", 23, 0 );
 			if( status == -1)
 				perror("send");
+
+			// RECIEVE MORE DATA
+			do{ 
+
+				// get the number of bytes recieved
+
+				// if we don't print a newline here, the server will hang on the
+				// following line. TODO: find out why!
+				printf( "\n" );
+				numbytes = recv( new_fd, buf, MAXDATASIZE-1, 0);
+				if( status == -1 ){
+					perror( "recv" );
+					exit(1);
+				}
+				buf[numbytes] = '\0';
+				printf( "buffer:|%s|", buf );
+
+				// TRANSLATE
+				status = strcmp( buf, "TRANSLATE" );
+				if( status == 0 ){
+					// TODO
+					numbytes = send( new_fd, "200 OK", 6, 0 );
+					if( status == -1)
+						perror("send");
+
+					continue;
+				}
+
+				// GET
+				status = strcmp( buf, "GET" );
+				if( status == 0 ){
+					// TODO
+					numbytes = send( new_fd, "200 OK", 6, 0 );
+					if( status == -1)
+						perror("send");
+
+					continue;
+				}
+
+				// STORE
+				status = strcmp( buf, "STORE" );
+				if( status == 0 ){
+					// TODO
+					numbytes = send( new_fd, "200 OK", 6, 0 );
+					if( status == -1)
+						perror("send");
+
+					continue;
+				}
+
+				// EXIT
+				status = strcmp( buf, "EXIT" );
+				if( status == 0 ){
+					// TODO
+					numbytes = send( new_fd, "200 OK", 6, 0 );
+					if( status == -1)
+						perror("send");
+
+					continue;
+				}
+
+				// if we made it this far, the command is not recognized.
+				numbytes = send( new_fd, "400 Command not valid.", 23, 0 );
+				if( status == -1)
+					perror("send");
+
+			} while( (strcmp(buf,"EXIT") != 0) );
 
 			close(new_fd);
 			exit(0);
