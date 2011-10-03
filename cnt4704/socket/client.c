@@ -1,6 +1,6 @@
 /*******************************************************************************
 * File:       client.c
-* Version:    0.3
+* Version:    0.4
 * Purpose:    Connects to server.c & implements TRANSLATE, GET, STORE, & EXIT
 * Author:     Michael Altfield <maltfield@knights.ucf.edu>
 * Course:     CNT4707
@@ -45,6 +45,8 @@
                                    FUNCTIONS                                    
 *******************************************************************************/
 
+// TODO: wrap common functions in header file
+
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
 {
@@ -53,6 +55,53 @@ void *get_in_addr(struct sockaddr *sa)
     }
 
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+
+/*******************************************************************************
+* Name:    sendH
+* Purpose: Helper function to send string data to server
+* Input:   sockfd - socket file descriptor
+*          s      - string to send
+* Output:  none (perror() & exit() program on fail)
+*******************************************************************************/
+void sendH( int sockfd, char* s ){
+
+	// VARIABLE DEFINITIONS
+	int status;
+
+	status = send( sockfd, s, strlen(s), 0 );
+
+	// did the send() succeed?
+	if( status == -1){
+		// there was an error sending; error & exit.
+		perror("send");
+		exit(1);
+	}
+
+}
+
+/*******************************************************************************
+* Name:    recvH
+* Purpose: Helper function to recieve string data from server
+* Input:   sockfd - socket file descriptor
+*          buf    - buffer to store the string data recieved from the server
+* Output:  none (perror() & exit() program on fail)
+*******************************************************************************/
+void recvH( int sockfd, char* buf ){
+
+	// VARIABLE DEFINITIONS
+	int numbytes;
+
+	numbytes = recv( sockfd, buf, MAXDATASIZE-1, 0);
+
+	// did the recv() succeed?
+	if( numbytes == -1 ){
+		perror( "recv" );
+		exit(1);
+	}
+
+	buf[numbytes] = '\0';
+
 }
 
 /*******************************************************************************
@@ -178,26 +227,21 @@ int main(){
 	// TODO: handle unexpected input (type & buffer overflow)
 	do{
 
+		// prompt the user for the command to send to the server
 		printf( "c: " );
 		scanf( "%s", &command );
 
 		// send command to server
-		status = send( sockfd, command, strlen(command), 0 );
-		if( status == -1)
-			perror("send");
+		sendH( sockfd, command );
 
-		numbytes = recv( sockfd, buf, MAXDATASIZE-1, 0);
-		if( status == -1 ){
-			perror( "recv" );
-			exit(1);
-		}
-		buf[numbytes] = '\0';
+		// get server's response & print to user
+		recvH( sockfd, buf );
 		printf( "s: %s\n", buf );
 
 		// TRANSLATE
 		status = strcmp( command, "TRANSLATE" );
 		if( status == 0 ){
-			// TODO: encapsulate in serverSupportsCmd( command );
+			// TODO
 			continue;
 		}
 

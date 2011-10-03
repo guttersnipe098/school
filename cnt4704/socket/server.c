@@ -1,6 +1,6 @@
 /*******************************************************************************
 * File:       server.c
-* Version:    0.3
+* Version:    0.4
 * Purpose:    Accepts connections & implements TRANSLATE, GET, STORE, & EXIT
 * Author:     Michael Altfield <maltfield@knights.ucf.edu>
 * Course:     CNT4707
@@ -49,6 +49,7 @@ socklen_t sin_size;
 struct sigaction sa;
 int sockfd, new_fd;
 char s[INET6_ADDRSTRLEN];
+char store_buffer[] = "We ain't in Joe-Ja no mo!";
 
 /*******************************************************************************
                                    FUNCTIONS                                    
@@ -56,6 +57,53 @@ char s[INET6_ADDRSTRLEN];
 
 void sigchld_handler( int s ){
     while(waitpid(-1, NULL, WNOHANG) > 0);
+}
+
+/*******************************************************************************
+* Name:    sendH
+* Purpose: Helper function to send string data to server
+* Input:   sockfd - socket file descriptor
+*          s      - string to send
+* Output:  none (perror() & exit() program on fail)
+*******************************************************************************/
+void sendH( int sockfd, char* s ){
+
+	// VARIABLE DEFINITIONS
+	int status;
+
+	status = send( sockfd, s, strlen(s), 0 );
+
+	// did the send() succeed?
+	if( status == -1){
+		// there was an error sending; error & exit.
+		perror("send");
+		exit(1);
+	}
+
+}
+
+/*******************************************************************************
+* Name:    recvH
+* Purpose: Helper function to recieve string data from server
+* Input:   sockfd - socket file descriptor
+*          buf    - buffer to store the string data recieved from the server
+* Output:  none (perror() & exit() program on fail)
+*******************************************************************************/
+void recvH( int sockfd, char* buf ){
+
+	// VARIABLE DEFINITIONS
+	int numbytes;
+
+	numbytes = recv( sockfd, buf, MAXDATASIZE-1, 0);
+
+	// did the recv() succeed?
+	if( numbytes == -1 ){
+		perror( "recv" );
+		exit(1);
+	}
+
+	buf[numbytes] = '\0';
+
 }
 
 /*******************************************************************************
@@ -210,26 +258,22 @@ int main(){
 			// RECIEVE MORE DATA
 			do{ 
 
+				// DEFINE VARIABLES
+				char *resp; // string to build our response to the client
+
 				// get the number of bytes recieved
 
 				// if we don't print a newline here, the server will hang on the
 				// following line. TODO: find out why!
 				printf( "\n" );
-				numbytes = recv( new_fd, buf, MAXDATASIZE-1, 0);
-				if( status == -1 ){
-					perror( "recv" );
-					exit(1);
-				}
-				buf[numbytes] = '\0';
+				recvH( new_fd, buf );
 				printf( "buffer:|%s|", buf );
 
 				// TRANSLATE
 				status = strcmp( buf, "TRANSLATE" );
 				if( status == 0 ){
+					sendH( new_fd, "200 OK" );
 					// TODO
-					numbytes = send( new_fd, "200 OK", 6, 0 );
-					if( status == -1)
-						perror("send");
 
 					continue;
 				}
@@ -237,10 +281,10 @@ int main(){
 				// GET
 				status = strcmp( buf, "GET" );
 				if( status == 0 ){
+					strcpy( resp, "200 OK\n" );
+					strcat( resp, store_buffer );
+					sendH( new_fd, resp );
 					// TODO
-					numbytes = send( new_fd, "200 OK", 6, 0 );
-					if( status == -1)
-						perror("send");
 
 					continue;
 				}
