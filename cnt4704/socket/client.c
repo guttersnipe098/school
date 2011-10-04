@@ -1,6 +1,6 @@
 /*******************************************************************************
 * File:       client.c
-* Version:    0.4
+* Version:    0.5
 * Purpose:    Connects to server.c & implements TRANSLATE, GET, STORE, & EXIT
 * Author:     Michael Altfield <maltfield@knights.ucf.edu>
 * Course:     CNT4707
@@ -123,7 +123,8 @@ int main(){
 	hints.ai_family = AF_INET;          // IPv4 only
 	hints.ai_socktype = SOCK_STREAM;    // TCP
 
-	char command[20] = "";
+	char command[20]; // store's user inputted command
+	int sentinel;     // used to exit loops
 
 	/****************
 	* getaddrinfo() *
@@ -225,6 +226,7 @@ int main(){
 
 	// TODO: reset command value
 	// TODO: handle unexpected input (type & buffer overflow)
+	sentinel = 0;
 	do{
 
 		// prompt the user for the command to send to the server
@@ -249,8 +251,14 @@ int main(){
 
 		// STORE
 
+		// EXIT
+		status = strcmp( command, "EXIT" );
+		if( status == 0 ){
+			sendH( sockfd, command );
+		}
+
 	// TODO: fix EXIT as defined in reqs (must send EXIT cmd to server)
-	} while( (strcmp( command, "EXIT" ) != 0) );
+	} while( sentinel == 0 );
 
 	/***********
 	* CLEANUP! *

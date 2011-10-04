@@ -1,6 +1,6 @@
 /*******************************************************************************
 * File:       server.c
-* Version:    0.4
+* Version:    0.5
 * Purpose:    Accepts connections & implements TRANSLATE, GET, STORE, & EXIT
 * Author:     Michael Altfield <maltfield@knights.ucf.edu>
 * Course:     CNT4707
@@ -18,8 +18,13 @@
 #define SERVER "localhost"
 #define PORT "3331"
 #define BACKLOG 10 // number of connections queue size
-int yes = 1;
 #define MAXDATASIZE 100 // max number of bytes that can be recieved at once
+#define OK "200 OK"
+#define NOT_OK "400 Command not valid."
+#define BUFFER "We ain't in Joe-Ja no mo!"
+
+#define DEBUG 1 // 0 = turn debug messages off
+                // 1 = turn debug messages on
 
 /*******************************************************************************
                                    INCLUDES                                     
@@ -42,14 +47,7 @@ int yes = 1;
                            GLOBAL VARIABLE DEFINITIONS                      
 *******************************************************************************/
 
-int status; // generic varaible for all function results
-struct addrinfo hints, *servinfo, *p;
-struct sockaddr_storage their_addr; //connector's address info
-socklen_t sin_size;
-struct sigaction sa;
-int sockfd, new_fd;
-char s[INET6_ADDRSTRLEN];
-char store_buffer[] = "We ain't in Joe-Ja no mo!";
+// na
 
 /*******************************************************************************
                                    FUNCTIONS                                    
@@ -116,12 +114,23 @@ int main(){
 	* VARIABLE DEFINITIONS *
 	***********************/
 
+	int yes = 1;
+	int status; // generic varaible for all function results
+	struct addrinfo hints, *servinfo, *p;
+	struct sockaddr_storage their_addr; // connector's address info
+	socklen_t sin_size;
+	struct sigaction sa;
+	int sockfd, new_fd;
+	char clientAddr[INET6_ADDRSTRLEN];
+	char store_buffer[] = BUFFER;
+
 	memset( &hints, 0, sizeof(hints) ); // make struct empty
 	hints.ai_family = AF_INET;          // IPv4 only
 	hints.ai_socktype = SOCK_STREAM;    // TCP
 	hints.ai_flags = AI_PASSIVE;        // use my ip
 
 	int numbytes; // number of bytes returned by send() or recv()
+	int sentinel; // used to exit loops
 	char buf[MAXDATASIZE];
 
 	/****************
@@ -242,34 +251,43 @@ int main(){
 
 		inet_ntop(
 		 their_addr.ss_family, &( ( (struct sockaddr_in*)&their_addr)->sin_addr ),
-		 s, sizeof(s)
+		 clientAddr, sizeof(clientAddr)
 		);
 
-		printf( "server: got connection from %s\n", s );
+		printf( "server: got connection from %s\n", clientAddr );
 
 		if( !fork() ){ // this is the child process
 
-			close(sockfd); // child doesn't need the listener
+			// child doesn't need the listener
+			close(sockfd);
 
-			numbytes = send( new_fd, "Server is ready...", 23, 0 );
-			if( status == -1)
-				perror("send");
+			// tell the client that we're ready and waiting for their command
+			sendH( new_fd, "Server is ready..." );
 
-			// RECIEVE MORE DATA
+			// loop until client commands us to EXIT
+			sentinel = 0;
 			do{ 
 
 				// DEFINE VARIABLES
 				char *resp; // string to build our response to the client
 
-				// get the number of bytes recieved
-
 				// if we don't print a newline here, the server will hang on the
 				// following line. TODO: find out why!
 				printf( "\n" );
-				recvH( new_fd, buf );
-				printf( "buffer:|%s|", buf );
 
-				// TRANSLATE
+				// recieve client's command on new_fd into buf
+				// note: this line is blocking
+				recvH( new_fd, buf );
+
+				// if DEBUG enabled, print client's incoming command
+				if( DEBUG ){
+					printf( "DEBUG: incoming cmd '%s' from %s.\n", buf, clientAddr );
+				}
+
+				/************
+				* TRANSLATE *
+				************/
+
 				status = strcmp( buf, "TRANSLATE" );
 				if( status == 0 ){
 					sendH( new_fd, "200 OK" );
@@ -278,45 +296,62 @@ int main(){
 					continue;
 				}
 
-				// GET
+				/******
+				* GET *
+				******/
+
 				status = strcmp( buf, "GET" );
 				if( status == 0 ){
+
+					// BUILD OUR RESPONSE STRING
+					// first, tell our client that the command is valid
 					strcpy( resp, "200 OK\n" );
+					// for GET, the next line of our response should be the store
 					strcat( resp, store_buffer );
 					sendH( new_fd, resp );
-					// TODO
 
 					continue;
 				}
 
-				// STORE
+				/********
+				* STORE *
+				********/
+
 				status = strcmp( buf, "STORE" );
 				if( status == 0 ){
+
+					// tell our client that the command is valid
+					sendH( new_fd, OK );
+
 					// TODO
-					numbytes = send( new_fd, "200 OK", 6, 0 );
-					if( status == -1)
-						perror("send");
 
 					continue;
 				}
 
-				// EXIT
+				/*******
+				* EXIT *
+				*******/
+
 				status = strcmp( buf, "EXIT" );
 				if( status == 0 ){
-					// TODO
-					numbytes = send( new_fd, "200 OK", 6, 0 );
-					if( status == -1)
-						perror("send");
 
+					// tell our client that the command is valid
+					sendH( new_fd, OK );
+
+					// print this action for logging
+					printf( "%s sends EXIT", clientAddr );
+
+					// exit the loop
+					sentinel = 1;
 					continue;
+
 				}
 
 				// if we made it this far, the command is not recognized.
-				numbytes = send( new_fd, "400 Command not valid.", 23, 0 );
-				if( status == -1)
-					perror("send");
+				sendH( new_fd, NOT_OK );
 
-			} while( (strcmp(buf,"EXIT") != 0) );
+			} while( sentinel == 0 );
+			printf( "out of loop" );
 
 			close(new_fd);
 			exit(0);

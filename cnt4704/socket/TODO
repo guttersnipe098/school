@@ -1,0 +1,9 @@
+* EXIT
+* TRANSLATE
+* STORE
+* Encapsulate common functions [at least sendH() & recvH()] in shared header file
+
+
+Done
+	* Moved unnecessary vars from global to main() scope
+	* Added '#define DEBUG' & various debug prints
