@@ -1,9 +1,14 @@
-* EXIT
-* TRANSLATE
-* STORE
+* Test it all on Eustis & prof's machine
+* Write report
+* Take screenshots
 * Encapsulate common functions [at least sendH() & recvH()] in shared header file
 
 
 Done
 	* Moved unnecessary vars from global to main() scope
 	* Added '#define DEBUG' & various debug prints
+	* EXIT
+	* GET
+	* TRANSLATE
+	* STORE
+	* Added Functons: getLines(), printServerResp(), strToUpper()

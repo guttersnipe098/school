@@ -1,12 +1,12 @@
 /*******************************************************************************
 * File:       client.c
-* Version:    0.5
+* Version:    0.6
 * Purpose:    Connects to server.c & implements TRANSLATE, GET, STORE, & EXIT
 * Author:     Michael Altfield <maltfield@knights.ucf.edu>
 * Course:     CNT4707
 * Assignment: 1
 * Created:    2011-10-01
-* Updated:    2011-10-02
+* Updated:    2011-10-05
 * Notes:      Much of this code's base was obtained/modified using:
               http://beej.us/guide/bgnet/
 *******************************************************************************/
@@ -18,6 +18,7 @@
 #define SERVER "localhost"
 #define PORT "3331"
 #define MAXDATASIZE 100 // max number of bytes that can be recieved at once
+#define OK "200 OK"
 
 /*******************************************************************************
                                    INCLUDES                                     
@@ -105,6 +106,81 @@ void recvH( int sockfd, char* buf ){
 }
 
 /*******************************************************************************
+* Name:    getLines
+* Purpose: Gets several lines of data from the user and store it to the given
+*          location. (end of input is designated by a line only containing ".")
+* Input:   s - the string to where we will store the collected input
+* Output:  none (the input defines the output)
+*******************************************************************************/
+void getLines( char* s ){
+
+	// DECLARE VARIABLES
+	int status;
+	int firstIteration = 1;
+
+	// TODO: test overflow of input[]
+	s[0] = '\0';
+	do{
+
+		// DECLARE VARIABLES
+		char input[100];
+
+		// don't print "c: " on the first iteration
+		if( firstIteration )
+			firstIteration = 0;
+		else
+			printf( "c: " );
+
+		fgets( input, sizeof(input), stdin );
+
+		// determine if the last line (period by itself) was entered
+		status = strcmp( input, ".\n" );
+		// was the last line of input entered?
+		if( status != 0 && (strcmp( input, "\n" ) != 0) )
+			// the user did not enter the last line of input
+			// add this line to the response string to send to the server
+			strcat( s, input );
+
+	} while( status != 0 );
+
+	// delete the last character of the string (a newline) by changing it to null
+	s[strlen(s)-1] = '\0';
+
+}
+
+/*******************************************************************************
+* Name:    printServerResp
+* Purpose: Prints the server's response, prepending "s: " to each line
+* Input:   s - the server's response
+* Output:  none. the output is printed directly to Standard Out
+*******************************************************************************/
+void printServerResp( char* s ){
+
+	printf( "s: ");
+
+	// loop through every character of the supplied string
+	for( int i =0; i<strlen(s); i++ ){
+
+		// print each character
+		printf( "%c", s[i] );
+
+		// is this current character a newline with more data after it?
+		if( s[i] == '\n' && i != (strlen(s)-1) )
+			// this iteration's character is a newline AND there's more data
+
+			// prepend this new line with "s: " to inform the user that this line
+			// of data came from the server
+			printf( "s: " );
+	}
+
+	// was the last line printed a newline?
+	if( s[strlen(s)-1] != '\n' )
+		// the last line printed was not a newline; print a newline
+		printf( "\n" );
+
+}
+
+/*******************************************************************************
                                    MAIN BODY                                    
 *******************************************************************************/
 
@@ -123,7 +199,6 @@ int main(){
 	hints.ai_family = AF_INET;          // IPv4 only
 	hints.ai_socktype = SOCK_STREAM;    // TCP
 
-	char command[20]; // store's user inputted command
 	int sentinel;     // used to exit loops
 
 	/****************
@@ -229,9 +304,13 @@ int main(){
 	sentinel = 0;
 	do{
 
+		// DECLARE VARIABLES
+		char command[10]; // store user inputted command
+		char resp[100];   // store user inputted response
+
 		// prompt the user for the command to send to the server
 		printf( "c: " );
-		scanf( "%s", &command );
+		scanf( "%s", (char *)&command );
 
 		// send command to server
 		sendH( sockfd, command );
@@ -240,24 +319,68 @@ int main(){
 		recvH( sockfd, buf );
 		printf( "s: %s\n", buf );
 
-		// TRANSLATE
+		/************
+		* TRANSLATE *
+		************/
+
 		status = strcmp( command, "TRANSLATE" );
 		if( status == 0 ){
-			// TODO
+
+			status = strcmp( buf, OK );
+			// did the server respond with an OK?
+			if( status != 0)
+				// the server did not respond with an OK; abort TRANSLATE
+				continue;
+
+			// the server responded with an OK; get input from the user
+			getLines( resp );
+
+			// send the user's inputted data to the server
+			sendH( sockfd, resp );
+
+			recvH( sockfd, buf );   // get the TRANSLATE'd data
+			printServerResp( buf ); // print the server's response
+
 			continue;
 		}
 
-		// GET
+		/********
+		* STORE *
+		********/
 
-		// STORE
+		status = strcmp( command, "STORE" );
+		if( status == 0 ){
 
-		// EXIT
+			status = strcmp( buf, OK );
+			// did the server respond with an OK?
+			if( status != 0)
+				// the server did not respond with an OK; abort TRANSLATE
+				continue;
+
+			// the server responded with an OK; get input from the user
+			getLines( resp );
+
+			// send the user's inputted data to the server
+			printf( "about to send:|%s|\n", resp );
+			sendH( sockfd, resp );
+
+			recvH( sockfd, buf );   // get the server's response
+			printServerResp( buf );
+
+			continue;
+		}
+
+		/*******
+		* EXIT *
+		*******/
+
 		status = strcmp( command, "EXIT" );
 		if( status == 0 ){
 			sendH( sockfd, command );
+			recvH( sockfd, buf );
+			sentinel = 1;
 		}
 
-	// TODO: fix EXIT as defined in reqs (must send EXIT cmd to server)
 	} while( sentinel == 0 );
 
 	/***********

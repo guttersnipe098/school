@@ -1,12 +1,12 @@
 /*******************************************************************************
 * File:       server.c
-* Version:    0.5
+* Version:    0.6
 * Purpose:    Accepts connections & implements TRANSLATE, GET, STORE, & EXIT
 * Author:     Michael Altfield <maltfield@knights.ucf.edu>
 * Course:     CNT4707
 * Assignment: 1
 * Created:    2011-10-01
-* Updated:    2011-10-02
+* Updated:    2011-10-05
 * Notes:      Much of this code's base was obtained/modified using:
               http://beej.us/guide/bgnet/
 *******************************************************************************/
@@ -42,6 +42,8 @@
 #include <arpa/inet.h>
 #include <sys/wait.h>
 #include <signal.h>
+
+#include <ctype.h>
 
 /*******************************************************************************
                            GLOBAL VARIABLE DEFINITIONS                      
@@ -102,6 +104,17 @@ void recvH( int sockfd, char* buf ){
 
 	buf[numbytes] = '\0';
 
+}
+
+/*******************************************************************************
+* Name:    strToUpper
+* Purpose: Converts a given string to all uppercase
+* Input:   s - our string to convert
+* Output:  none (s is a pointer, so it is edited directly)
+*******************************************************************************/
+void strToUpper( char* s ){
+	for( int i = 0; i<strlen(s); i++ )
+		s[i] = toupper( s[i] );
 }
 
 /*******************************************************************************
@@ -269,7 +282,7 @@ int main(){
 			do{ 
 
 				// DEFINE VARIABLES
-				char *resp; // string to build our response to the client
+				char *resp[100]; // string to build our response to the client
 
 				// if we don't print a newline here, the server will hang on the
 				// following line. TODO: find out why!
@@ -290,8 +303,15 @@ int main(){
 
 				status = strcmp( buf, "TRANSLATE" );
 				if( status == 0 ){
-					sendH( new_fd, "200 OK" );
-					// TODO
+
+					// first, tell our client that the command is valid
+					sendH( new_fd, OK );
+
+					recvH( new_fd, buf ); // get the data from the client
+					strToUpper( buf );    // TRANSLATE the data
+
+					// send the client back the TRANSLATE'd data
+					sendH( new_fd, buf );
 
 					continue;
 				}
@@ -305,10 +325,11 @@ int main(){
 
 					// BUILD OUR RESPONSE STRING
 					// first, tell our client that the command is valid
-					strcpy( resp, "200 OK\n" );
+					strcpy( (char *)resp, OK );
+					strcat( (char *)resp, "\n" );
 					// for GET, the next line of our response should be the store
-					strcat( resp, store_buffer );
-					sendH( new_fd, resp );
+					strcat( (char *)resp, store_buffer );
+					sendH( new_fd, (char *)resp );
 
 					continue;
 				}
@@ -320,10 +341,15 @@ int main(){
 				status = strcmp( buf, "STORE" );
 				if( status == 0 ){
 
-					// tell our client that the command is valid
+					// first, tell our client that the command is valid
 					sendH( new_fd, OK );
 
-					// TODO
+					recvH( new_fd, buf ); // get the data from the client
+
+					strcpy( (char *)store_buffer, buf );
+
+					// first, tell our client that the command is valid
+					sendH( new_fd, OK );
 
 					continue;
 				}
@@ -351,7 +377,6 @@ int main(){
 				sendH( new_fd, NOT_OK );
 
 			} while( sentinel == 0 );
-			printf( "out of loop" );
 
 			close(new_fd);
 			exit(0);
