@@ -361,7 +361,6 @@ int main(){
 			getLines( resp );
 
 			// send the user's inputted data to the server
-			printf( "about to send:|%s|\n", resp );
 			sendH( sockfd, resp );
 
 			recvH( sockfd, buf );   // get the server's response
