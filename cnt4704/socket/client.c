@@ -1,6 +1,6 @@
 /*******************************************************************************
 * File:       client.c
-* Version:    0.6
+* Version:    0.7
 * Purpose:    Connects to server.c & implements TRANSLATE, GET, STORE, & EXIT
 * Author:     Michael Altfield <maltfield@knights.ucf.edu>
 * Course:     CNT4707

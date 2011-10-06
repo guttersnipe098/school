@@ -1,6 +1,6 @@
 /*******************************************************************************
 * File:       server.c
-* Version:    0.6
+* Version:    0.7
 * Purpose:    Accepts connections & implements TRANSLATE, GET, STORE, & EXIT
 * Author:     Michael Altfield <maltfield@knights.ucf.edu>
 * Course:     CNT4707
@@ -150,7 +150,7 @@ int main(){
 	* getaddrinfo() *
 	****************/
 
-	status = getaddrinfo(SERVER, PORT, &hints, &servinfo);
+	status = getaddrinfo(NULL, PORT, &hints, &servinfo);
 
 	// were there errors?
 	if( status != 0 ){
