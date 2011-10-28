@@ -1,3 +1,17 @@
+/*******************************************************************************
+* File:       simulator.c
+* Version:    0.2
+* Purpose:    Simulate the Alternating Bit Protocol / rdt3.0
+* Author:     Michael Altfield <maltfield@knights.ucf.edu>
+* Course:     CNT4707
+* Assignment: 2
+* Created:    2011-10-28
+* Updated:    2011-10-28
+* Notes:      Much of this code's base was obtained/modified from:
+              http://www.cs.ucf.edu/~czou/CNT4704/simulator.c
+              mirror: https://github.com/guttersnipe098/school/blob/e2d82e3a3d9218059c0498dc6eaec6ea0f267f05/cnt4704/abp/simulator.c
+*******************************************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
