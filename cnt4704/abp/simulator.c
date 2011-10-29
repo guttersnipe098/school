@@ -6,15 +6,29 @@
 * Course:     CNT4707
 * Assignment: 2
 * Created:    2011-10-28
-* Updated:    2011-10-28
+* Updated:    2011-10-29
 * Notes:      Much of this code's base was obtained/modified from:
               http://www.cs.ucf.edu/~czou/CNT4704/simulator.c
               mirror: https://github.com/guttersnipe098/school/blob/e2d82e3a3d9218059c0498dc6eaec6ea0f267f05/cnt4704/abp/simulator.c
 *******************************************************************************/
 
+/*******************************************************************************
+                                   SETTINGS                                    
+*******************************************************************************/
+
+#define DEBUG 3 // 3=all debug, 2=some debug 1=warnings only, 0=no debug
+
+#define A 0
+#define B 1
+
+/*******************************************************************************
+                                   INCLUDES                                     
+*******************************************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <string.h>
 
 /* ******************************************************************
  ALTERNATING BIT AND GO-BACK-N NETWORK EMULATOR: 
@@ -56,22 +70,58 @@ void stoptimer(int);
 void tolayer3(int,struct pkt);
 void tolayer5(int, struct msg);
 
-/********* STUDENTS WRITE THE NEXT SEVEN ROUTINES *********/
+/*******************************************************************************
+                           GLOBAL VARIABLE DEFINITIONS                      
+*******************************************************************************/
 
+static struct pkt A_pkt;
+
+/*******************************************************************************
+                                   FUNCTIONS                                    
+*******************************************************************************/
+
+/********* STUDENTS WRITE THE NEXT SEVEN ROUTINES *********/
 
 /* called from layer 5, passed the data to be sent to other side. Return a 1 if 
 data is accepted for transmission, negative number otherwise */
 int A_output(message)
   struct msg message;
 {
- 
-  return 1;
+	if(DEBUG>1){ printf("\t\tDEBUG: Begin A_output(%s)\n", message.data); }
+
+	/*****************
+	* make_pkt(data) *
+	*****************/
+
+	// seqnum
+	A_pkt.seqnum = 0;
+
+	// acknum
+	A_pkt.acknum = 0;
+
+	// checksum
+	A_pkt.checksum = 0;
+
+	// payload
+	strcpy( A_pkt.payload, message.data );
+	if(DEBUG>2){ printf("\t\tDEBUG: A_pkt.payload:|%s|\n", A_pkt.payload); }
+
+	/****************
+	* udt_send(pkt) *
+	****************/
+
+	// send packet to layer 3
+	if(DEBUG>1){ printf("\t\tDEBUG: Sending A_pkt to layer 3\n"); }
+	tolayer3( A, A_pkt );
+
+	return 1;
 }
 
-/* called from layer 3, when a packet arrives for layer 4 */
+/* called from layer 3, when a packet arrives for layer 4 at A*/
 void A_input(packet)
   struct pkt packet;
 {
+
 
 }
 
@@ -93,7 +143,23 @@ void A_init()
 void B_input(packet)
   struct pkt packet;
 {
+	if(DEBUG>1){ printf("\t\tDEBUG: Begin B_input(%s)\n", packet.payload); }
 
+	// DECLARE VARIABLES
+	struct msg message;
+
+	/******************
+	* extract(rcvpkt) *
+	******************/
+
+	strcpy( message.data, packet.payload );
+
+	/**********************
+	* deliver_data(data)) *
+	**********************/
+
+	if(DEBUG>1){ printf("\t\tDEBUG: Sending msg to B's layer 5\n"); }
+	tolayer5( B, message );
 }
 
 /* called when B's timer goes off */
@@ -108,7 +174,6 @@ void B_init()
 {
 
 }
-
 
 /****************************************************************
 ***************** NETWORK EMULATION CODE STARTS BELOW ***********
@@ -422,17 +487,29 @@ void init()
 
    printf("-----  Stop and Wait Network Simulator Version 1.1 -------- \n\n");
    printf("Enter the number of messages to simulate: ");
-   scanf("%d",&nsimmax);
+	// TODO: remove override
+   // scanf("%d",&nsimmax);
+	nsimmax = 2;
    printf("Enter packet loss probability [enter 0.0 for no loss]: ");
-   scanf("%f",&lossprob);
+	// TODO: remove override
+   //scanf("%f",&lossprob);
+	lossprob = 0.0;
    printf("Enter packet corruption probability [0.0 for no corruption]: ");
-   scanf("%f",&corruptprob);
+	// TODO: remove override
+   //scanf("%f",&corruptprob);
+	corruptprob = 0.0;
    printf("Enter average time between messages from sender's layer5 [ > 0.0]: ");
-   scanf("%f",&lambda);
+	// TODO: remove override
+   //scanf("%f",&lambda);
+	lambda = 50;
    printf("Enter a seed for the random number generator [0 will provide a random seed]: ");
-   scanf("%d",&randseed);
+	// TODO: remove override
+   //scanf("%d",&randseed);
+	randseed = 1;
    printf("Enter TRACE [0,1,2,3]: ");
-   scanf("%d",&TRACE);
+	// TODO: remove override
+   //scanf("%d",&TRACE);
+	TRACE = 3;
 
    /* init random number generator */
    init_random(randseed);
