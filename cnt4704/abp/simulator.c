@@ -1,25 +1,31 @@
 /*******************************************************************************
 * File:       simulator.c
-* Version:    0.2
+* Version:    0.3
 * Purpose:    Simulate the Alternating Bit Protocol / rdt3.0
 * Author:     Michael Altfield <maltfield@knights.ucf.edu>
 * Course:     CNT4707
 * Assignment: 2
 * Created:    2011-10-28
-* Updated:    2011-10-29
+* Updated:    2011-10-30
 * Notes:      Much of this code's base was obtained/modified from:
-              http://www.cs.ucf.edu/~czou/CNT4704/simulator.c
-              mirror: https://github.com/guttersnipe098/school/blob/e2d82e3a3d9218059c0498dc6eaec6ea0f267f05/cnt4704/abp/simulator.c
+*              * http://www.cs.ucf.edu/~czou/CNT4704/simulator.c
+*              * mirror: https://github.com/guttersnipe098/school/blob/e2d82e3a3d9218059c0498dc6eaec6ea0f267f05/cnt4704/abp/simulator.c
+*
+*             This program was written to be compiled against the GNU99 standard
+*             Please compile with `gcc --std=gnu99`
 *******************************************************************************/
 
 /*******************************************************************************
                                    SETTINGS                                    
 *******************************************************************************/
 
-#define DEBUG 3 // 3=all debug, 2=some debug 1=warnings only, 0=no debug
+#define DEBUG 3 // 3=all debug, 2=some debug, 1=warnings only, 0=no debug
 
 #define A 0
 #define B 1
+
+#define READY   0
+#define WAITING 1
 
 /*******************************************************************************
                                    INCLUDES                                     
@@ -70,11 +76,18 @@ void stoptimer(int);
 void tolayer3(int,struct pkt);
 void tolayer5(int, struct msg);
 
+int checksum( struct pkt* );
+int corrupt( struct pkt* );
+void printPacket( struct pkt* );
+void makeAck( struct pkt* );
+
 /*******************************************************************************
                            GLOBAL VARIABLE DEFINITIONS                      
 *******************************************************************************/
 
-static struct pkt A_pkt;
+int A_state;
+struct pkt A_pkt;
+int B_lastPktSeq;
 
 /*******************************************************************************
                                    FUNCTIONS                                    
@@ -89,22 +102,32 @@ int A_output(message)
 {
 	if(DEBUG>1){ printf("\t\tDEBUG: Begin A_output(%s)\n", message.data); }
 
+	// are we currently waiting to hear an ACK/NAK from B?
+	if( A_state == WAITING ){
+		if(DEBUG>1){ printf("\t\tDEBUG: A's state is WAITING; return -1\n"); }
+		// we are waiting for an ACK/NAK; don't send another packet!
+		return -1;
+	}
+
 	/*****************
 	* make_pkt(data) *
 	*****************/
 
-	// seqnum
-	A_pkt.seqnum = 0;
+	// seqnum should be the alternate bit from the last packet sent
+	A_pkt.seqnum = (A_pkt.seqnum+1) % 2;
 
 	// acknum
 	A_pkt.acknum = 0;
 
-	// checksum
-	A_pkt.checksum = 0;
-
 	// payload
 	strcpy( A_pkt.payload, message.data );
-	if(DEBUG>2){ printf("\t\tDEBUG: A_pkt.payload:|%s|\n", A_pkt.payload); }
+
+	// checksum
+	A_pkt.checksum = checksum( &A_pkt );
+
+	if(DEBUG>2){
+		printf("\t\tDEBUG: A_pkt = "); printPacket( &A_pkt ); printf( "\n" );
+	}
 
 	/****************
 	* udt_send(pkt) *
@@ -114,6 +137,10 @@ int A_output(message)
 	if(DEBUG>1){ printf("\t\tDEBUG: Sending A_pkt to layer 3\n"); }
 	tolayer3( A, A_pkt );
 
+	// set A's state to WAITING
+	if(DEBUG>1){ printf("\t\tDEBUG: Setting A's state to WAITING\n"); }
+	A_state = WAITING;
+
 	return 1;
 }
 
@@ -121,7 +148,44 @@ int A_output(message)
 void A_input(packet)
   struct pkt packet;
 {
+	if(DEBUG>1){ printf("\t\tDEBUG: Begin A_input(%s)\n", packet.payload); }
+	if(DEBUG>2){
+		printf("\t\tDEBUG: "); printPacket( &packet ); printf( "\n" );
+	}
 
+	// is the packet we recieved corrupt?
+	if( corrupt( &packet ) ){
+		// this packet is corrupt; we don't know if B got the last packet; resend
+		if(DEBUG>2){ printf("\t\tDEBUG: ACK or NAK is corrupt!\n"); }
+
+		// resend last packet
+		if(DEBUG>1){ printf("\t\tDEBUG: Re-sending A_pkt to layer 3\n"); }
+		// TODO do nothing when rdt3.0 (wait for timeout instead)
+		tolayer3( A, A_pkt );
+
+	} else {
+		// the packet we recieved is NOT corrupt
+
+		// is this packet an ACK or NAK?
+		if( A_pkt.seqnum != packet.seqnum ){
+			// B says the last packet it recieved was not the last one we sent=NAK
+			if(DEBUG>2){ printf("\t\tDEBUG: Recieved NAK!\n"); }
+
+			// resend A_pkt
+			if(DEBUG>1){ printf("\t\tDEBUG: Re-sending A_pkt to layer 3\n"); }
+			tolayer3( A, A_pkt );
+
+		} else {
+			// B says the last packet it recieved was the last one we sent=ACK
+			if(DEBUG>2){ printf("\t\tDEBUG: Recieved ACK!\n"); }
+
+			// set A's state to READY
+			if(DEBUG>1){ printf("\t\tDEBUG: Setting A's state to READY\n"); }
+			A_state = READY;
+
+		} // end if(NAK or ACK)
+
+	} // end if( packet corrupt? )
 
 }
 
@@ -135,32 +199,74 @@ void A_timerinterrupt()
 /* entity A routines are called. You can use it to do any initialization */
 void A_init()
 {
+	// our first packet received will have seqnum=0, so initial should be 1
+	A_pkt.seqnum = 1;
+
+	// set A's initial state to READY
+	A_state = READY;
 
 }
-
 
 /* called from layer 3, when a packet arrives for layer 4 at B*/
 void B_input(packet)
   struct pkt packet;
 {
 	if(DEBUG>1){ printf("\t\tDEBUG: Begin B_input(%s)\n", packet.payload); }
+	if(DEBUG>2){
+		printf("\t\tDEBUG: "); printPacket( &packet ); printf( "\n" );
+	}
 
 	// DECLARE VARIABLES
 	struct msg message;
 
-	/******************
-	* extract(rcvpkt) *
-	******************/
+	// is the packet we recieved corrupt?
+	if( DEBUG > 1 && corrupt( &packet ) ){
+		// the packet we recieved is corrupt
+		printf("\t\tDEBUG: Packet is corrupt!\n");
 
-	strcpy( message.data, packet.payload );
+	} else if( DEBUG > 1 && packet.seqnum == B_lastPktSeq){
+		// we have already received this packet; resend ACK
+		printf("\t\tDEBUG: Recieved duplicate data packet\n");
 
-	/**********************
-	* deliver_data(data)) *
-	**********************/
+	} else {
+		// the packet we recieved is intact; deliver up to layer 5 & send ACK
+		if(DEBUG>1){ printf("\t\tDEBUG: Packet is NOT corrupt.\n"); }
 
-	if(DEBUG>1){ printf("\t\tDEBUG: Sending msg to B's layer 5\n"); }
-	tolayer5( B, message );
-}
+		/******************
+		* extract(rcvpkt) *
+		******************/
+
+		strcpy( message.data, packet.payload );
+
+		/**********************
+		* deliver_data(data)) *
+		**********************/
+
+		if(DEBUG>1){ printf("\t\tDEBUG: Sending msg to B's layer 5\n"); }
+		tolayer5( B, message );
+
+		// remember the last packet that we successfully received
+		B_lastPktSeq = packet.seqnum;
+
+	} // end if(packet is corrupt)
+
+	/****************
+	* udt_send(ACK) *
+	****************/
+
+	// make ACK or NAK (see function for why this is the same call)
+	makeAck( &packet );
+
+	if(DEBUG>2){
+		printf("\t\tDEBUG: ACK = "); printPacket( &packet ); printf( "\n" );
+	}
+	if(DEBUG>1){ printf("\t\tDEBUG: Sending ACK back thru layer 3 to A\n"); }
+
+	tolayer3( B, packet );
+
+	return;
+
+} // end B_input()
 
 /* called when B's timer goes off */
 void B_timerinterrupt()
@@ -172,6 +278,99 @@ void B_timerinterrupt()
 /* entity B routines are called. You can use it to do any initialization */
 void B_init()
 {
+
+	// our first packet received will have seqnum=0, so initial should be 1
+	B_lastPktSeq = 1;
+
+}
+
+/*******************************************************************************
+* Name:    checksum
+* Purpose: calculates the checksum of the supplied packet
+* Input:   p - pointer to the packet whoose checksum should be calculated
+* Output:  the integer value of the supplied packet's checksum
+*******************************************************************************/
+int checksum( struct pkt* p ){
+
+	// DECLARE VARIABLES
+	int sentinel;
+	int result = 0;
+
+	// to start, add the sequence number and the acknowledgement numbers
+	result += p->seqnum;
+	result += p->acknum;
+
+	// now, add each character in the packet's payload to the result
+	sentinel = strlen( p->payload );
+	for( int i=0; i<sentinel; i++ )
+		result += (int) p->payload[i];
+
+	// return our checksum value!
+	return result;
+
+}
+
+/*******************************************************************************
+* Name:    corrupt
+* Purpose: determines if the supplied packet is corrupt or not
+* Input:   p - pointer to the packet whoose checksum should be verified
+* Output:  0 if not corrupt, 1 otherwise
+*******************************************************************************/
+int corrupt( struct pkt* p ){
+
+	// does the packet's checksum match it's calculated checksum?
+	if( checksum(p) == p->checksum )
+		// looks good!
+		return 0;
+
+	// if we made it this far, p is corrupt
+	return 1;
+
+}
+
+/*******************************************************************************
+* Name:    makeAck
+* Purpose: builds an ACK/NAK packet from the supplied packet pointer
+* Input:   p - pointer to the packet to be ACK/NAK-ified
+* Output:  none - this function changes the packet by reference
+*******************************************************************************/
+void makeAck( struct pkt* p ){
+
+	// Note: an ACK packet and a NAK packet are essentially the same. Their
+	// differentiating feature is packet.seqnum, which is always the last packet
+	// that was successfully recieved by B (this is defined by B_lastPktSeq).
+
+	// an ACK/NAK packet has:
+	
+	// an empty payload
+	memset( &p->payload, '\0', sizeof(char)*20 );
+
+	// the seqnum of the last packet we recieved
+	p->seqnum = B_lastPktSeq;
+
+	// the ACK flag enabled
+	p->acknum = 1;
+
+	// a newly calculated checksum
+	p->checksum = checksum( p );
+
+	return;
+
+}
+
+/*******************************************************************************
+* Name:    printPacket
+* Purpose: prints the supplied packet to STDOUT in a human-readable format
+* Input:   p - pointer to the packet to be printed
+* Output:  none
+*******************************************************************************/
+void printPacket( struct pkt* p ){
+
+	printf("seq:%d ack:%d checksum:%d |%s|",
+		p->seqnum, p->acknum, p->checksum, p->payload
+	);
+
+	return;
 
 }
 
@@ -497,15 +696,15 @@ void init()
    printf("Enter packet corruption probability [0.0 for no corruption]: ");
 	// TODO: remove override
    //scanf("%f",&corruptprob);
-	corruptprob = 0.0;
+	corruptprob = 0.9;
    printf("Enter average time between messages from sender's layer5 [ > 0.0]: ");
 	// TODO: remove override
    //scanf("%f",&lambda);
-	lambda = 50;
+	lambda = 100;
    printf("Enter a seed for the random number generator [0 will provide a random seed]: ");
 	// TODO: remove override
    //scanf("%d",&randseed);
-	randseed = 1;
+	randseed = 0;
    printf("Enter TRACE [0,1,2,3]: ");
 	// TODO: remove override
    //scanf("%d",&TRACE);
